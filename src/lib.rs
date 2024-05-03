@@ -182,6 +182,11 @@ where
         })
     }
 
+    pub fn len(&self) -> usize {
+        let inner = self.inner.borrow();
+        inner.len as usize
+    }
+
     pub fn get(&self, index: usize) -> Option<T> {
         let mut inner = self.inner.borrow_mut();
         let data = inner.get(index as u64).expect("io error")?;
@@ -210,9 +215,11 @@ mod tests {
 
         let n = 1000;
         for i in 0..n {
+            assert_eq!(target.len(), i);
             let s = "a".repeat(i);
             target.push(&s);
         }
+        assert_eq!(target.len(), n);
 
         for i in 0..n {
             let s = "a".repeat(i);
@@ -255,6 +262,7 @@ mod tests {
         drop(target);
 
         let target = ColdVec::<String>::new(&name).unwrap();
+        assert_eq!(target.len(), n);
         for i in 0..n {
             let s = "a".repeat(i);
             assert_eq!(target.get(i), Some(s));
