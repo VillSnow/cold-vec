@@ -131,6 +131,14 @@ impl<const CHUNK_SIZE: usize> ColdVecInner<CHUNK_SIZE> {
         self.cursor = self.len;
         Ok(())
     }
+
+    pub fn clear(&mut self) -> Result<(), std::io::Error> {
+        self.file.seek(SeekFrom::Start(0))?;
+        self.file.set_len(0)?;
+        self.len = 0;
+        self.cursor = 0;
+        Ok(())
+    }
 }
 
 pub struct ColdVec<T, const CHUNK_SIZE: usize = 112>
@@ -168,6 +176,10 @@ where
         let mut inner = self.inner.borrow_mut();
         inner.push(&value).expect("io error");
     }
+
+    pub fn clear(&mut self) {
+        self.inner.borrow_mut().clear().expect("io error");
+    }
 }
 
 #[cfg(test)]
@@ -176,7 +188,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut target = ColdVec::<String>::new("vec.bin").unwrap();
+        let mut target = ColdVec::<String>::new(format!("test-ws/{l}", l = line!())).unwrap();
 
         let n = 1000;
         for i in 0..n {
@@ -193,5 +205,20 @@ mod tests {
             let s = "a".repeat(i);
             assert_eq!(target.get(i), Some(s));
         }
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut target = ColdVec::<String>::new(format!("test-ws/{l}", l = line!())).unwrap();
+
+        let n = 1000;
+        for i in 0..n {
+            let s = "a".repeat(i);
+            target.push(&s);
+        }
+
+        target.clear();
+
+        assert_eq!(target.get(0), None);
     }
 }
