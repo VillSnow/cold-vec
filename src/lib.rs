@@ -24,17 +24,34 @@ struct ChunkHeader {
 
 impl<const CHUNK_SIZE: usize> ColdVecInner<CHUNK_SIZE> {
     fn new(file: File) -> Result<Self, std::io::Error> {
-        file.set_len(0)?;
-        Ok(Self {
+        let mut r = Self {
             file,
             len: 0,
             cursor: 0,
-        })
+        };
+
+        if r.file.metadata()?.len() > 0 {
+            r.file.seek(SeekFrom::End(-Self::total_chunk_size_i64()))?;
+            let h = r.read_chunk_header()?;
+            r.len = h.index + 1;
+            r.cursor = h.index + 1;
+        }
+        Ok(r)
+    }
+
+    const fn total_chunk_size_i64() -> i64 {
+        CHUNK_HEADER_SIZE as i64 + CHUNK_SIZE as i64
+    }
+
+    const fn total_chunk_size_u64() -> u64 {
+        CHUNK_HEADER_SIZE as u64 + CHUNK_SIZE as u64
     }
 
     fn write_chunk_header(&mut self, header: ChunkHeader) -> Result<(), std::io::Error> {
-        let total_chunk_size = CHUNK_HEADER_SIZE as u64 + CHUNK_SIZE as u64;
-        assert_eq!(self.file.stream_position().unwrap() % total_chunk_size, 0);
+        assert_eq!(
+            self.file.stream_position().unwrap() % Self::total_chunk_size_u64(),
+            0
+        );
 
         self.file.write_all(&header.index.to_le_bytes())?;
         self.file.write_all(&header.offset.to_le_bytes())?;
@@ -189,6 +206,7 @@ mod tests {
     #[test]
     fn it_works() {
         let mut target = ColdVec::<String>::new(format!("test-ws/{l}", l = line!())).unwrap();
+        target.clear();
 
         let n = 1000;
         for i in 0..n {
@@ -210,6 +228,7 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut target = ColdVec::<String>::new(format!("test-ws/{l}", l = line!())).unwrap();
+        target.clear();
 
         let n = 1000;
         for i in 0..n {
@@ -220,5 +239,25 @@ mod tests {
         target.clear();
 
         assert_eq!(target.get(0), None);
+    }
+
+    #[test]
+    fn test_reopen() {
+        let name = format!("test-ws/{l}", l = line!());
+        let mut target = ColdVec::<String>::new(&name).unwrap();
+        target.clear();
+
+        let n = 1000;
+        for i in 0..n {
+            let s = "a".repeat(i);
+            target.push(&s);
+        }
+        drop(target);
+
+        let target = ColdVec::<String>::new(&name).unwrap();
+        for i in 0..n {
+            let s = "a".repeat(i);
+            assert_eq!(target.get(i), Some(s));
+        }
     }
 }
